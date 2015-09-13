@@ -1,0 +1,1 @@
+%{"socket": {:git, "https://github.com/meh/elixir-socket.git", "ce1a6384412fb5bf8f7fc88b8d6b6c25aac0d04d", []}}
