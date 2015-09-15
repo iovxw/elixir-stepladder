@@ -1,4 +1,4 @@
-defmodule Stepladder.Stream do
+defmodule Stepladder.Socket do
   import Kernel, except: [send: 2]
 
   @block_size 16

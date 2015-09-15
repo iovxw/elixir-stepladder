@@ -2,12 +2,12 @@ defmodule StepladderTest do
   use ExUnit.Case
 
   def handle(client) do
-    client = Stepladder.Stream.init(client, <<"0000000000000000">>)
+    client = Stepladder.Socket.init(client, <<"0000000000000000">>)
 
-    data = client |> Stepladder.Stream.recv!
+    data = client |> Stepladder.Socket.recv!
     IO.inspect data
-    client |> Stepladder.Stream.send!("OK!")
-    client |> Stepladder.Stream.close
+    client |> Stepladder.Socket.send!("OK!")
+    client |> Stepladder.Socket.close
   end
 
   def serve(server) do
@@ -21,11 +21,11 @@ defmodule StepladderTest do
     spawn(fn -> server |> serve end)
 
     client = Socket.TCP.connect!("127.0.0.1", 8082)
-    client = Stepladder.Stream.init(client, <<"0000000000000000">>)
+    client = Stepladder.Socket.init(client, <<"0000000000000000">>)
 
-    client |> Stepladder.Stream.send!("OK?")
-    data = client |> Stepladder.Stream.recv!
+    client |> Stepladder.Socket.send!("OK?")
+    data = client |> Stepladder.Socket.recv!
     IO.inspect data
-    client |> Stepladder.Stream.close
+    client |> Stepladder.Socket.close
   end
 end
