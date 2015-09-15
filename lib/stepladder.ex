@@ -20,42 +20,43 @@ defmodule Stepladder do
   end
 
   def handle(client) do
-    data = client |> Stepladder.Socket.recv!(1)
+    data = client |> Socket.Stream.recv!(1)
     <<req_type>> = data
 
     case req_type do
       0 ->
         proxy_tcp(client)
       1 ->
-        client |> Stepladder.Socket.send!(<<2>>)
-        client |> Stepladder.Socket.close
+        client |> Socket.Stream.send!(<<2>>)
+        client |> Socket.Stream.close
       n ->
-        client |> Stepladder.Socket.close
+        client |> Socket.Stream.close
         IO.puts "Unknown req_type: #{n}"
     end
   end
 
   def proxy_tcp(client) do
-    data = client |> Stepladder.Socket.recv!(1)
+    data = client |> Socket.Stream.recv!(1)
     <<host_len>> = data
-    host = client |> Stepladder.Socket.recv!(host_len)
-    data = client |> Stepladder.Socket.recv!(2)
+    host = client |> Socket.Stream.recv!(host_len)
+    data = client |> Socket.Stream.recv!(2)
     <<port::big-integer-size(16)>> = data
+    IO.inspect client |> Socket.remote!
     IO.puts "[TCP] #{host}:#{port} [+]"
 
     case Socket.TCP.connect(host, port) do
       {:ok, server} ->
-        client |> Stepladder.Socket.send!(<<0>>)
+        client |> Socket.Stream.send!(<<0>>)
         s = self()
         spawn fn ->
-          copy_as_to_ts(client, server)
-          client |> Stepladder.Socket.close
+          copy(client, server)
+          client |> Socket.close
           server |> Socket.close
           send(s, :done)
         end
         spawn fn ->
-          copy_ts_to_as(server, client)
-          client |> Stepladder.Socket.close
+          copy(server, client)
+          client |> Socket.close
           server |> Socket.close
           send(s, :done)
         end
@@ -63,9 +64,9 @@ defmodule Stepladder do
         wait_all_done(2)
       {:error, err} ->
         IO.puts err
-        client |> Stepladder.Socket.send!(<<3>>)
+        client |> Socket.Stream.send!(<<3>>)
     end
-    client |> Stepladder.Socket.close
+    client |> Socket.close
     IO.puts "[TCP] #{host}:#{port} [-]"
   end
 
@@ -79,31 +80,13 @@ defmodule Stepladder do
     end
   end
 
-  defp copy_as_to_ts(aessocket, tcpsocket) do
-    case aessocket |> Stepladder.Socket.recv do
+  defp copy(src, dst) do
+    case src |> Socket.Stream.recv do
       {:ok, data} ->
-        IO.inspect data
         if data != nil do
-          case tcpsocket |> Socket.Stream.send(data) do
+          case dst |> Socket.Stream.send(data) do
             :ok ->
-              copy_as_to_ts(aessocket, tcpsocket)
-            {:error, err} ->
-              IO.puts err
-          end
-        end
-      {:error, err} ->
-        IO.puts err
-    end
-  end
-
-  defp copy_ts_to_as(tcpsocket, aessocket) do
-    case tcpsocket |> Socket.Stream.recv do
-      {:ok, data} ->
-        IO.inspect data
-        if data != nil do
-          case aessocket |> Stepladder.Socket.send(data) do
-            :ok ->
-              copy_ts_to_as(tcpsocket, aessocket)
+              copy(src, dst)
             {:error, err} ->
               IO.puts err
           end

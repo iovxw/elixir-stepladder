@@ -3,6 +3,8 @@ defmodule Stepladder.Socket do
 
   @block_size 16
 
+  defstruct pid: nil, raw: nil
+
   defp block_encrypt(key, data) do
     :crypto.block_encrypt(:aes_ecb, key, data)
   end
@@ -31,7 +33,7 @@ defmodule Stepladder.Socket do
     # socket, key, recv_state, send_state
     self = {socket, key, nil, nil}
     pid = spawn fn -> loop(self) end
-    pid
+    %Stepladder.Socket{pid: pid, raw: socket}
   end
 
   defp loop(self) do
@@ -54,9 +56,10 @@ defmodule Stepladder.Socket do
             Kernel.send(pid, err)
             loop(self)
         end
-      :close ->
+      {:close, pid} ->
         socket = elem(self, 0)
-        socket |> Socket.close
+        result = socket |> Socket.close
+        Kernel.send(pid, result)
     end
   end
 
@@ -81,35 +84,15 @@ defmodule Stepladder.Socket do
   end
 
   def recv(socket, length) do
-    Kernel.send(socket, {:recv, length, self()})
+    Kernel.send(socket.pid, {:recv, length, self()})
     receive do
       result ->
         result
     end
   end
 
-  def recv!(socket, length) do
-    case socket |> recv(length) do
-      {:ok, data} ->
-        data
-      {:error, err} ->
-        socket |> close
-        raise Socket.Error, reason: err
-    end
-  end
-
   def recv(socket) do
     socket |> recv(0)
-  end
-
-  def recv!(socket) do
-    case socket |> recv do
-      {:ok, data} ->
-        data
-      {:error, err} ->
-        socket |> close
-        raise Socket.Error, reason: err
-    end
   end
 
   defp send_p(self, data) do
@@ -134,24 +117,50 @@ defmodule Stepladder.Socket do
   end
 
   def send(socket, data) do
-    Kernel.send(socket, {:send, data, self()})
+    Kernel.send(socket.pid, {:send, data, self()})
     receive do
       result ->
         result
     end
   end
 
-  def send!(socket, data) do
-    case socket |> send(data) do
-      :ok ->
-        data
-      {:error, err} ->
-        socket |> close
-        raise Socket.Error, reason: err
+  def close(socket) do
+    Kernel.send(socket.pid, {:close, self()})
+    receive do
+      result ->
+        result
     end
   end
+end
 
-  def close(socket) do
-    Kernel.send(socket, :close)
+defimpl Socket.Protocol, for: Stepladder.Socket do
+  def local(self) do
+    self.raw |> Socket.local
+  end
+
+  def remote(self) do
+    self.raw |> Socket.remote
+  end
+
+  def close(self) do
+    self |> Stepladder.Socket.close
+  end
+end
+
+defimpl Socket.Stream.Protocol, for: Stepladder.Socket do
+  def send(self, data) do
+    self |> Stepladder.Socket.send(data)
+  end
+
+  def recv(self) do
+    self |> Stepladder.Socket.recv
+  end
+
+  def recv(self, length_or_options) do
+    self |> Stepladder.Socket.recv(length_or_options)
+  end
+
+  def close(self) do
+    self |> Stepladder.Socket.close
   end
 end

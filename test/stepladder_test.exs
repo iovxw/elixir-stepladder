@@ -4,10 +4,10 @@ defmodule StepladderTest do
   def handle(client) do
     client = Stepladder.Socket.init(client, <<"0000000000000000">>)
 
-    data = client |> Stepladder.Socket.recv!
+    data = client |> Socket.Stream.recv!
     IO.inspect data
-    client |> Stepladder.Socket.send!("OK!")
-    client |> Stepladder.Socket.close
+    client |> Socket.Stream.send!("OK!")
+    client |> Socket.close
   end
 
   def serve(server) do
@@ -23,9 +23,9 @@ defmodule StepladderTest do
     client = Socket.TCP.connect!("127.0.0.1", 8082)
     client = Stepladder.Socket.init(client, <<"0000000000000000">>)
 
-    client |> Stepladder.Socket.send!("OK?")
-    data = client |> Stepladder.Socket.recv!
+    client |> Socket.Stream.send!("OK?")
+    data = client |> Socket.Stream.recv!
     IO.inspect data
-    client |> Stepladder.Socket.close
+    client |> Socket.close
   end
 end
