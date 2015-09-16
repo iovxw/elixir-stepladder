@@ -18,14 +18,22 @@ defmodule Stepladder.KV do
   end
 
   def put(self, key, data) do
-    send(self, {:put, key, data})
+    if Process.alive?(self) do
+      send(self, {:put, key, data})
+    else
+      raise "closed"
+    end
   end
 
   def get(self, key) do
-    send(self, {:get, key, self()})
-    receive do
-      data ->
-        data
+    if Process.alive?(self) do
+      send(self, {:get, key, self()})
+      receive do
+        data ->
+          data
+      end
+    else
+      raise "closed"
     end
   end
 
