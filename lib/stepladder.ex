@@ -43,8 +43,8 @@ defmodule Stepladder do
     host = client |> Socket.Stream.recv!(host_len)
     data = client |> Socket.Stream.recv!(2)
     <<port::big-integer-size(16)>> = data
-    IO.inspect client |> Socket.remote!
-    IO.puts "[TCP] #{host}:#{port} [+]"
+    addr = parse_addr(client |> Socket.remote!)
+    IO.puts "[TCP] #{addr} #{host}:#{port} [+]"
 
     case Socket.TCP.connect(host, port) do
       {:ok, server} ->
@@ -67,15 +67,22 @@ defmodule Stepladder do
           wait_all_done(2)
         after
           server |> Socket.close
+          IO.puts "[TCP] #{addr} #{host}:#{port} [-]"
         end
       {:error, err} ->
         IO.puts err
         client |> Socket.Stream.send!(<<3>>)
+        IO.puts "[TCP] #{addr} #{host}:#{port} [x]"
     end
-    IO.puts "[TCP] #{host}:#{port} [-]"
   end
 
-  defp wait_all_done(all)do
+  defp parse_addr(src) do
+    {addr, port} = src
+    s = :inet_parse.ntoa(addr)
+    "#{s}:#{port}"
+  end
+
+  defp wait_all_done(all) do
     receive do
       _ ->
         all = all-1

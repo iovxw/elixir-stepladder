@@ -7,6 +7,12 @@ defmodule StepladderTest do
     data = client |> Socket.Stream.recv!
     IO.inspect data
     client |> Socket.Stream.send!("OK!")
+    data = client |> Socket.Stream.recv!
+    IO.inspect data
+    client |> Socket.Stream.send!("OK!")
+    data = client |> Socket.Stream.recv!
+    IO.inspect data
+    client |> Socket.Stream.send!("OK!")
     client |> Socket.close
   end
 
@@ -20,12 +26,18 @@ defmodule StepladderTest do
 
     spawn(fn -> server |> serve end)
 
-    client = Socket.TCP.connect!("127.0.0.1", 8082)
-    client = Stepladder.Socket.init(client, <<"0000000000000000">>)
+    server = Socket.TCP.connect!("127.0.0.1", 8082)
+    server = Stepladder.Socket.init(server, <<"0000000000000000">>)
 
-    client |> Socket.Stream.send!("OK?")
-    data = client |> Socket.Stream.recv!
+    server |> Socket.Stream.send!("OK?")
+    data = server |> Socket.Stream.recv!
     IO.inspect data
-    client |> Socket.close
+    server |> Socket.Stream.send!("OK?")
+    data = server |> Socket.Stream.recv!
+    IO.inspect data
+    server |> Socket.Stream.send!("OK?")
+    data = server |> Socket.Stream.recv!
+    IO.inspect data
+    server |> Socket.close
   end
 end
