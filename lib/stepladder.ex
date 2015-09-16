@@ -20,18 +20,20 @@ defmodule Stepladder do
   end
 
   def handle(client) do
-    data = client |> Socket.Stream.recv!(1)
-    <<req_type>> = data
+    try do
+      data = client |> Socket.Stream.recv!(1)
+      <<req_type>> = data
 
-    case req_type do
-      0 ->
-        proxy_tcp(client)
-      1 ->
-        client |> Socket.Stream.send!(<<2>>)
-        client |> Socket.Stream.close
-      n ->
-        client |> Socket.Stream.close
-        IO.puts "Unknown req_type: #{n}"
+      case req_type do
+        0 ->
+          proxy_tcp(client)
+        1 ->
+          client |> Socket.Stream.send!(<<2>>)
+        n ->
+          IO.puts "Unknown req_type: #{n}"
+      end
+    after
+      client |> Socket.close
     end
   end
 
@@ -46,27 +48,30 @@ defmodule Stepladder do
 
     case Socket.TCP.connect(host, port) do
       {:ok, server} ->
-        client |> Socket.Stream.send!(<<0>>)
-        s = self()
-        spawn fn ->
-          copy(client, server)
-          client |> Socket.close
-          server |> Socket.close
-          send(s, :done)
-        end
-        spawn fn ->
-          copy(server, client)
-          client |> Socket.close
-          server |> Socket.close
-          send(s, :done)
-        end
+        try do
+          client |> Socket.Stream.send!(<<0>>)
+          s = self()
+          spawn fn ->
+            copy(client, server)
+            client |> Socket.close
+            server |> Socket.close
+            send(s, :done)
+          end
+          spawn fn ->
+            copy(server, client)
+            client |> Socket.close
+            server |> Socket.close
+            send(s, :done)
+          end
 
-        wait_all_done(2)
+          wait_all_done(2)
+        after
+          server |> Socket.close
+        end
       {:error, err} ->
         IO.puts err
         client |> Socket.Stream.send!(<<3>>)
     end
-    client |> Socket.close
     IO.puts "[TCP] #{host}:#{port} [-]"
   end
 
