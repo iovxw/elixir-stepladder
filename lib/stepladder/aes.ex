@@ -139,7 +139,7 @@ defmodule Stepladder.Socket do
         end
         {:reply, {:ok, data}, self}
       {:error, _} = err ->
-        {:reply, err, self}
+        {:stop, :normal, err, self}
     end
   end
 
@@ -151,7 +151,7 @@ defmodule Stepladder.Socket do
       :ok ->
         {:reply, :ok, self |> Dict.put(:send_state, new_state)}
       {:error, _} = err ->
-        {:reply, err, self}
+        {:stop, :normal, err, self}
     end
   end
 

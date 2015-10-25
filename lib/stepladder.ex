@@ -86,11 +86,10 @@ defmodule Stepladder do
 
           wait_all_done(2)
         after
-          server |> Socket.close
           IO.puts "[TCP] #{addr} #{host}:#{port} [-]"
         end
       {:error, err} ->
-        IO.puts err
+        IO.inspect err
         client |> Socket.Stream.send!(<<3>>)
         IO.puts "[TCP] #{addr} #{host}:#{port} [x]"
     end
