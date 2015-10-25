@@ -1,10 +1,9 @@
 defmodule Stepladder.Socket do
   import Kernel, except: [send: 2]
   use Bitwise
+  use GenServer
 
   @block_size 16
-
-  defstruct kv: nil, key: nil, raw: nil
 
   defp stream_init(key, iv) do
     :crypto.stream_init(:aes_ctr, key, iv)
@@ -80,12 +79,14 @@ defmodule Stepladder.Socket do
             raise "Hash values do not match"
           end
 
-          state = %{recv_state: stream_init(aes_key, iv1),
-                    send_state: stream_init(aes_key, iv2)}
-          kv = Stepladder.KV.new(state)
-          {:ok, %Stepladder.Socket{kv: kv, key: key, raw: socket}}
+          self = [recv_state: stream_init(aes_key, iv1),
+                  send_state: stream_init(aes_key, iv2),
+                  raw: socket]
+          GenServer.start_link(__MODULE__, self)
         rescue
-          e -> {:error, e}
+          e ->
+            socket |> Socket.close()
+            {:error, e}
         end
       :server ->
         try do
@@ -113,82 +114,89 @@ defmodule Stepladder.Socket do
 
           socket |> Socket.Stream.send!(handshake)
 
-          state = %{recv_state: stream_init(aes_key, iv2),
-                    send_state: stream_init(aes_key, iv1)}
-          kv = Stepladder.KV.new(state)
-          {:ok, %Stepladder.Socket{kv: kv, key: key, raw: socket}}
+          self = [recv_state: stream_init(aes_key, iv2),
+                  send_state: stream_init(aes_key, iv1),
+                  raw: socket]
+          GenServer.start_link(__MODULE__, self)
         rescue
-          e -> {:error, e}
+          e ->
+            socket |> Socket.close()
+            {:error, e}
         end
     end
   end
 
-  def recv(self, length) do
-    state = self.kv |> Stepladder.KV.get(:recv_state)
-    socket = self.raw
-    case socket |> Socket.Stream.recv(length) do
+  def init(self), do: {:ok, self}
+
+  def handle_call({:recv, length_or_options}, _from, self) do
+    state = self[:recv_state]
+    socket = self[:raw]
+    case socket |> Socket.Stream.recv(length_or_options) do
       {:ok, data} ->
         if data != nil do
           {new_state, data} = stream_decrypt(state, data)
-          self.kv |> Stepladder.KV.put(:recv_state, new_state)
+          self = self |> Dict.put(:recv_state, new_state)
         end
-        {:ok, data}
+        {:reply, {:ok, data}, self}
       {:error, _} = err ->
-        err
+        {:reply, err, self}
     end
   end
 
-  def recv(self) do
-    self |> recv(0)
-  end
-
-  def send(self, data) do
-    state = self.kv |> Stepladder.KV.get(:send_state)
-    socket = self.raw
+  def handle_call({:send, data}, _from, self) do
+    state = self[:send_state]
+    socket = self[:raw]
     {new_state, data} = stream_encrypt(state, data)
-    self.kv |> Stepladder.KV.put(:send_state, new_state)
     case socket |> Socket.Stream.send(data) do
       :ok ->
-        :ok
+        {:reply, :ok, self |> Dict.put(:send_state, new_state)}
       {:error, _} = err ->
-        err
+        {:reply, err, self}
     end
   end
 
-  def close(self) do
-    self.kv |> Stepladder.KV.close
-    self.raw |> Socket.close
+  def handle_call(:raw, _from, self) do
+    {:reply, self[:raw], self}
+  end
+
+  def handle_cast(:close, self) do
+    {:stop, :normal, self}
+  end
+
+  def terminate(_reason, self) do
+    self[:raw] |> Socket.close()
+    :ok
   end
 end
 
-defimpl Socket.Protocol, for: Stepladder.Socket do
+defimpl Socket.Protocol, for: PID do
   def local(self) do
-    self.raw |> Socket.local
+    GenServer.call(self, :raw) |> Socket.local
   end
 
   def remote(self) do
-    self.raw |> Socket.remote
+    GenServer.call(self, :raw) |> Socket.remote
   end
 
   def close(self) do
-    self |> Stepladder.Socket.close
+    GenServer.cast(self, :close)
   end
 end
 
-defimpl Socket.Stream.Protocol, for: Stepladder.Socket do
+defimpl Socket.Stream.Protocol, for: PID do
   def send(self, data) do
-    self |> Stepladder.Socket.send(data)
+    GenServer.call(self, {:send, data})
   end
 
   def recv(self) do
-    self |> Stepladder.Socket.recv
+    GenServer.call(self, {:recv, 0})
   end
 
   def recv(self, length_or_options) do
-    self |> Stepladder.Socket.recv(length_or_options)
+    GenServer.call(self, {:recv, length_or_options})
   end
 
   def close(self) do
-    self |> Stepladder.Socket.close
+    GenServer.cast(self, :close)
   end
 end

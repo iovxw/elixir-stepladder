@@ -1,9 +1,23 @@
 defmodule Stepladder do
-  def main(args) do
-    [key, port] = args
-    IO.puts "port: #{port}\nkey: #{key}"
+  require Logger
+  use Application
 
-    server = Socket.TCP.listen!(8082)
+  def start(_type, [port: port, key: key]) do
+    import Supervisor.Spec, warn: false
+
+    children = [
+      supervisor(Task.Supervisor, [[name: Stepladder.TaskSupervisor]]),
+      worker(Task, [Stepladder, :main, [port, key]]),
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: Stepladder.Supervisor)
+  end
+
+  def main(port, key) do
+    Logger.info "Ver: #{Mix.Project.config[:version]} " <>
+                "Port: #{port} " <>
+                "Key: #{key}"
+    server = Socket.TCP.listen!(port)
 
     server |> serve(key)
   end

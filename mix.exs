@@ -7,7 +7,6 @@ defmodule Stepladder.Mixfile do
      elixir: "~> 1.0",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     escript: [main_module: Stepladder],
      deps: deps]
   end
 
@@ -15,7 +14,10 @@ defmodule Stepladder.Mixfile do
   #
   # Type `mix help compile.app` for more information
   def application do
-    [applications: [:logger, :crypto]]
+    [applications: [:logger, :crypto],
+     mod: {Stepladder,
+       [port: Application.get_env(:stepladder, :port),
+        key: Application.get_env(:stepladder, :key)]}]
   end
 
   # Dependencies can be Hex packages:
