@@ -28,6 +28,7 @@ defmodule Stepladder.Mixfile do
   #
   # Type `mix help deps` for more examples and options
   defp deps do
-    [{:socket, git: "https://github.com/meh/elixir-socket.git"}]
+    [{:socket, github: "meh/elixir-socket"},
+     {:curve25519, github: "schnef/curve25519"}]
   end
 end

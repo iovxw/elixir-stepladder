@@ -1,1 +1,2 @@
-%{"socket": {:git, "https://github.com/meh/elixir-socket.git", "ce1a6384412fb5bf8f7fc88b8d6b6c25aac0d04d", []}}
+%{"curve25519": {:git, "https://github.com/schnef/curve25519.git", "ee8a2ebdd008e0e9aa4eddc368482934bd8433da", []},
+  "socket": {:git, "https://github.com/meh/elixir-socket.git", "5d6478616219bae4f5e87611859234cfd88e8417", []}}
