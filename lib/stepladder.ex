@@ -30,11 +30,11 @@ defmodule Stepladder do
               {:ok, client} ->
                 handle(client)
               {:error, err} ->
-                IO.inspect err
+                Logger.error "Stepladder.Socket.init: #{inspect err}"
             end
           end
         {:error, err} ->
-          IO.inspect err
+          Logger.error "Socket.TCP.accept: #{inspect err}"
       end
       serve(server, key)
   end
@@ -50,7 +50,7 @@ defmodule Stepladder do
         1 ->
           client |> Socket.Stream.send!(<<2>>)
         n ->
-          IO.puts "Unknown req_type: #{n}"
+          Logger.error "Unknown req_type: #{n}"
       end
     after
       client |> Socket.close
@@ -64,7 +64,7 @@ defmodule Stepladder do
     data = client |> Socket.Stream.recv!(2)
     <<port::big-integer-size(16)>> = data
     addr = parse_addr(client |> Socket.remote!)
-    IO.puts "[TCP] #{addr} #{host}:#{port} [+]"
+    Logger.info "[TCP] #{addr} #{host}:#{port} [+]"
 
     case Socket.TCP.connect(host, port) do
       {:ok, server} ->
@@ -86,12 +86,12 @@ defmodule Stepladder do
 
           wait_all_done(2)
         after
-          IO.puts "[TCP] #{addr} #{host}:#{port} [-]"
+          Logger.info "[TCP] #{addr} #{host}:#{port} [-]"
         end
       {:error, err} ->
-        IO.inspect err
+        Logger.error "Socket.TCP.connect(#{host}, #{port}): #{inspect err}"
         client |> Socket.Stream.send!(<<3>>)
-        IO.puts "[TCP] #{addr} #{host}:#{port} [x]"
+        Logger.info "[TCP] #{addr} #{host}:#{port} [x]"
     end
   end
 
@@ -118,12 +118,16 @@ defmodule Stepladder do
           case dst |> Socket.Stream.send(data) do
             :ok ->
               copy(src, dst)
+            {:error, :closed} ->
+              :ok
             {:error, err} ->
-              IO.puts err
+              Logger.error "Copy: #{inspect err}"
           end
         end
+      {:error, :closed} ->
+        :ok
       {:error, err} ->
-        IO.puts err
+        Logger.error "Copy: #{inspect err}"
     end
   end
 end
