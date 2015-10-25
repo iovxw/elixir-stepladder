@@ -11,10 +11,16 @@ defmodule Stepladder do
   def serve(server, key) do
       case server |> Socket.TCP.accept do
         {:ok, client} ->
-          client = Stepladder.Socket.init(client, key)
-          spawn fn -> handle(client) end
+          spawn fn ->
+            case Stepladder.Socket.init(client, key, :server) do
+              {:ok, client} ->
+                handle(client)
+              {:error, err} ->
+                IO.inspect err
+            end
+          end
         {:error, err} ->
-          IO.puts err
+          IO.inspect err
       end
       serve(server, key)
   end
