@@ -47,90 +47,92 @@ defmodule Stepladder.Socket do
     end
   end
 
-  def init(socket, key, side) when side == :server or side == :client do
+  def init(socket, key, :client) do
     if :random.seed == :random.seed0 do
       :random.seed(:os.timestamp)
     end
-    case side do
-      :client ->
-        {private_key, public_key} = Stepladder.ECDH.generate_key(rand_bytes(32))
+    {private_key, public_key} = Stepladder.ECDH.generate_key(rand_bytes(32))
 
-        l1 = :random.uniform(32)
-        r1 = rand_bytes(l1)
-        r_head = <<xor_byte_by_key(l1, key)>> <> r1
+    l1 = :random.uniform(32)
+    r1 = rand_bytes(l1)
+    r_head = <<xor_byte_by_key(l1, key)>> <> r1
 
-        l2 = :random.uniform(32)
-        r2 = rand_bytes(l2)
-        r_tail = <<xor_byte_by_key(l2, key)>> <> r2
+    l2 = :random.uniform(32)
+    r2 = rand_bytes(l2)
+    r_tail = <<xor_byte_by_key(l2, key)>> <> r2
 
-        handshake = r_head <> public_key <> r_tail
+    handshake = r_head <> public_key <> r_tail
 
-        try do
-          socket |> Socket.Stream.send!(handshake)
+    try do
+      socket |> Socket.Stream.send!(handshake)
 
-          {:ok, _} = socket |> read_placeholder(key)
-          data = socket |> Socket.Stream.recv!(32+32)
-          <<server_public_key::binary-size(32), hash::binary-size(32)>> = data
-          {:ok, _} = socket |> read_placeholder(key)
+      {:ok, _} = socket |> read_placeholder(key)
+      data = socket |> Socket.Stream.recv!(32+32)
+      <<server_public_key::binary-size(32), hash::binary-size(32)>> = data
+      {:ok, _} = socket |> read_placeholder(key)
 
-          result = Stepladder.ECDH.generate_shared_secret(private_key, server_public_key)
-          aes_key = result
-          <<iv1::binary-size(16), iv2::binary-size(16)>> = result
+      result = Stepladder.ECDH.generate_shared_secret(private_key, server_public_key)
+      aes_key = result
+      <<iv1::binary-size(16), iv2::binary-size(16)>> = result
 
-          if :crypto.hash(:sha256, key <> result) != hash do
-            raise "Hash values do not match"
-          end
-
-          recv_state = stream_init(aes_key, iv1)
-          send_state = stream_init(aes_key, iv2)
-
-          {:ok, recver} = GenServer.start_link(__MODULE__, recv_state)
-          {:ok, sender} = GenServer.start_link(__MODULE__, send_state)
-
-          {:ok, %__MODULE__{recver: recver, sender: sender, raw: socket}}
-        rescue
-          e ->
-            socket |> Socket.close()
-            {:error, e}
+      if :crypto.hash(:sha256, key <> result) != hash do
+        raise "Hash values do not match"
         end
-      :server ->
-        try do
-          {:ok, _} = socket |> read_placeholder(key)
-          client_public_key = socket |> Socket.Stream.recv!(32)
-          {:ok, _} = socket |> read_placeholder(key)
 
-          {private_key, public_key} = Stepladder.ECDH.generate_key(rand_bytes(32))
+        recv_state = stream_init(aes_key, iv1)
+        send_state = stream_init(aes_key, iv2)
 
-          result = Stepladder.ECDH.generate_shared_secret(private_key, client_public_key)
-          aes_key = result
-          <<iv1::binary-size(16), iv2::binary-size(16)>> = result
+        {:ok, recver} = GenServer.start_link(__MODULE__, recv_state)
+        {:ok, sender} = GenServer.start_link(__MODULE__, send_state)
 
-          hash = :crypto.hash(:sha256, key <> result)
+        {:ok, %__MODULE__{recver: recver, sender: sender, raw: socket}}
+    rescue
+      e ->
+        socket |> Socket.close()
+        {:error, e}
+    end
+  end
 
-          l1 = :random.uniform(32)
-          r1 = rand_bytes(l1)
-          r_head = <<xor_byte_by_key(l1, key)>> <> r1
+  def init(socket, key, :server) do
+    if :random.seed == :random.seed0 do
+      :random.seed(:os.timestamp)
+    end
+    try do
+      {:ok, _} = socket |> read_placeholder(key)
+      client_public_key = socket |> Socket.Stream.recv!(32)
+      {:ok, _} = socket |> read_placeholder(key)
 
-          l2 = :random.uniform(32)
-          r2 = rand_bytes(l2)
-          r_tail = <<xor_byte_by_key(l2, key)>> <> r2
+      {private_key, public_key} = Stepladder.ECDH.generate_key(rand_bytes(32))
 
-          handshake = r_head <> public_key <> hash <> r_tail
+      result = Stepladder.ECDH.generate_shared_secret(private_key, client_public_key)
+      aes_key = result
+      <<iv1::binary-size(16), iv2::binary-size(16)>> = result
 
-          socket |> Socket.Stream.send!(handshake)
+      hash = :crypto.hash(:sha256, key <> result)
 
-          recv_state = stream_init(aes_key, iv2)
-          send_state = stream_init(aes_key, iv1)
+      l1 = :random.uniform(32)
+      r1 = rand_bytes(l1)
+      r_head = <<xor_byte_by_key(l1, key)>> <> r1
 
-          {:ok, recver} = GenServer.start_link(__MODULE__, recv_state)
-          {:ok, sender} = GenServer.start_link(__MODULE__, send_state)
+      l2 = :random.uniform(32)
+      r2 = rand_bytes(l2)
+      r_tail = <<xor_byte_by_key(l2, key)>> <> r2
 
-          {:ok, %__MODULE__{recver: recver, sender: sender, raw: socket}}
-        rescue
-          e ->
-            socket |> Socket.close()
-            {:error, e}
-        end
+      handshake = r_head <> public_key <> hash <> r_tail
+
+      socket |> Socket.Stream.send!(handshake)
+
+      recv_state = stream_init(aes_key, iv2)
+      send_state = stream_init(aes_key, iv1)
+
+      {:ok, recver} = GenServer.start_link(__MODULE__, recv_state)
+      {:ok, sender} = GenServer.start_link(__MODULE__, send_state)
+
+      {:ok, %__MODULE__{recver: recver, sender: sender, raw: socket}}
+    rescue
+      e ->
+        socket |> Socket.close()
+        {:error, e}
     end
   end
 

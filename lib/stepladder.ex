@@ -66,7 +66,7 @@ defmodule Stepladder do
     addr = parse_addr(client |> Socket.remote!)
     Logger.info "[TCP] #{addr} #{host}:#{port} [+]"
 
-    case Socket.TCP.connect(host, port) do
+    case connect_tcp(host, port) do
       {:ok, server} ->
         try do
           client |> Socket.Stream.send!(<<0>>)
@@ -92,6 +92,14 @@ defmodule Stepladder do
         Logger.error "Socket.TCP.connect(#{host}, #{port}): #{inspect err}"
         client |> Socket.Stream.send!(<<3>>)
         Logger.info "[TCP] #{addr} #{host}:#{port} [x]"
+    end
+  end
+
+  defp connect_tcp(addr, port) do
+    case Socket.TCP.connect(addr, port) do
+      {:error, :nxdomain} ->
+        Socket.TCP.connect(addr, port, [:inet6])
+      result -> result
     end
   end
 
