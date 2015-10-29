@@ -17,9 +17,12 @@ defmodule Stepladder do
     Logger.info "Ver: #{Mix.Project.config[:version]} " <>
                 "Port: #{port} " <>
                 "Key: #{key}"
-    server = Socket.TCP.listen!(port)
-
-    server |> serve(key)
+    case Socket.TCP.listen(port) do
+      {:ok, server} ->
+        server |> serve(key)
+      {:error, err} ->
+        Logger.error "Socket.TCP.listen(#{port}): #{inspect err}"
+    end
   end
 
   def serve(server, key) do
