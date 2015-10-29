@@ -101,7 +101,7 @@ defmodule Stepladder do
   defp connect_tcp(addr, port) do
     case Socket.TCP.connect(addr, port) do
       {:error, :nxdomain} ->
-        Socket.TCP.connect(addr, port, [:inet6])
+        Socket.TCP.connect(addr, port, [version: 6])
       result -> result
     end
   end
